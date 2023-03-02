@@ -1,0 +1,166 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Dec 18 15:17:32 2020
+
+@author: pdsu_szj
+"""
+#求出所有值的平均
+
+import networkx as nx
+import matplotlib.pyplot as plt
+import pylab
+import random
+import operator
+import math
+from itertools import groupby
+import openpyxl
+import pathlib
+path = 'TEST.txt'#此处更换数据集
+by_value = operator.itemgetter(1)
+name = 'TEST.xlsx'
+#def simjkd( u, v):
+#    set_v = set( G.neighbors(v))
+#    set_v.add(v)
+#    set_u = set( G.neighbors(u))
+#    set_u.add(u)
+#    jac = len(set_v & set_u) * 1.0 / len(set_v | set_u) #杰肯德相似系数
+#    jac = (len(set_v & set_u)-2) * 1.0 /( len(set_v | set_u)-2 )邻里重复度
+#    jac =1/(1+ abs(len(set_v)-len(set_u)))欧氏距离-衡量相似度
+#    jac = len(set_v)*len(set_u)/(pow(len(set_v),2)+ pow(len(set_u),2)-len(set_v)*len(set_u))
+#    广义Jaccard相似度，
+#    return jac
+
+G = nx.Graph()
+nums = G.number_of_nodes() # 节点 数
+with open(path) as file:
+    for line in file:
+        head, tail = [int(x) for x in line.split()]
+        G.add_edge(head, tail)
+nums = G.number_of_nodes() # 节点 数
+#print('总节点数',nums)
+G.remove_edges_from(nx.selfloop_edges(G))
+def calculation_shortest_path():#计算并将结构存储在excel中
+    i = 0
+    for node in G.nodes():
+        print("{node}节点写入xlsx,已经计算了{num}".format(node=node,num=i))
+        dict = {}
+        for otherNode in G.nodes:
+            if node == otherNode:
+                continue
+            try:
+                distance = nx.shortest_path_length(G, node, otherNode)  # 距离
+                r =distance
+                if r not in dict.keys():
+                    dict[r] = []
+                dict[r].append(otherNode)
+            except:
+                print("{node}和{otherNode}没有边".format(node=node,otherNode=otherNode))
+        for index in dict.keys():
+            ws.cell(node+1,index).value = str(dict[index]).replace("[",'').replace("]",'').replace(' ','')
+        i = i + 1
+    wb.save(name)#保存格式为node为行  列为对应最短距离的节点集合
+#打开excel文件没有则创建
+if  pathlib.Path(name).exists():#判断excel存在不存在
+    wb = openpyxl.load_workbook(name)
+    ws = wb.active
+else:
+    wb = openpyxl.Workbook()
+    wb.save("./"+name)
+    ws = wb.active
+    calculation_shortest_path()
+
+def get_shortest_path(node,r):#从excel中拿出对应的r阶跳
+    value =  ws.cell(node+1,r).value
+    if value!= None :
+        return  set(map(int,str(value).lstrip(',').rstrip(',').split(",")))
+    return value
+
+def get_all_shortest_path(node,r):#最短距离为r以内所有节点
+    setu = set()
+    while r>=1:
+        value = get_shortest_path(node+1,r)
+        if value != None :
+           setu = setu | value
+        r= r - 1
+    return setu
+
+print(get_shortest_path(1,1))
+
+k_shell=nx.core_number(G) 
+print('k_shell :',k_shell)
+maxKshell=max(k_shell.values())#通过max()函数找到字典k_shell中的value最大值。
+minKshell=min(k_shell.values())#通过max()函数找到字典k_shell中的value最小值。
+print("maxks",maxKshell)
+maxD=max(dict(G.degree()).values())
+#print("maxD",maxD)
+#print(G.degree(22))
+#nx.draw(G,with_labels=True)
+#plt.show()
+
+
+def Caculatation():
+    N = {}
+    for vi in G.nodes():
+        datas = {}
+        num = 0 #6阶以内节点个数
+        for vj in G.nodes():
+            try:
+                if vi == vj:
+                    length = 0
+                else :
+                    length = nx.shortest_path_length(G,source=vi,target=vj)
+                    
+                if length>6:
+                    continue
+                ks = abs(k_shell[vi]-k_shell[vj])
+                
+                data = G.degree(vj)*math.exp((-1)*length)+(k_shell.get(vj)/maxKshell)*math.exp((-1)*ks)
+                datas[vj] = data
+            except:
+#                datas[vj] = 0
+                 print("没有连接",vj)
+        N[vi] = G.degree(vi)+sum(datas.values())/(nums-1)*1.0+k_shell.get(vi)/maxKshell
+
+def Caculatations():
+    N = {}
+    for vi in G.nodes():
+        datas = {}
+        for index in range(1,3):#生成1-6
+            set_node = get_shortest_path(vi,index)#距离为r的节点
+            if set_node == None :
+                break
+            for vj in set_node:
+                 ks = abs(k_shell[vi]-k_shell[vj])
+                 data = (G.degree(vj)*math.exp((-1)*index)+k_shell.get(vj)*math.exp((-1)*ks))/maxKshell
+                 datas[vj] = data
+                 print("vi,vj,datas",vi,vj,datas[vj])
+        if len(datas)==0:#有问题？
+            N[vi] = 0
+        else:
+            N[vi] = G.degree(vi)+sum(datas.values())/(nums-1)*1.0+k_shell.get(vi)
+    return N
+#print("resulthu4={result4}\nresulthu4-1={result4s}".format(result4=Caculatation(),result4s=Caculatations()))
+
+data1 = Caculatations()
+
+sortNum = sorted(data1.items(),key=lambda x : x[1],reverse=True)#算法一结果从da到xiao输出
+nodelist=[]
+for key in sortNum:
+    nodelist.append(key.__getitem__(0))
+#print(nodelist)
+f =open('outputdata\\hu4-2nums_'+path, "w+")
+for key,val in sortNum:
+   f.write(str(key)+'\t'+str(val)+"\n")
+f.close()
+#按照节点编号排序
+nodelist1=[]
+sortNum1 = sorted(data1.items(), key=lambda x: x[0], reverse=False)
+ #将结果保存到文件中
+for key in sortNum1:
+    nodelist1.append(key.__getitem__(0))
+#print(nodelist1)
+
+f =open('outputdata\\hu4-2nums_1'+path, "w+")
+for key,val in sortNum1:
+   f.write(str(key)+'\t'+str(val)+"\n")   
+f.close()
